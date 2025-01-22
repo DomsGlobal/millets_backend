@@ -2,8 +2,8 @@ const mysql = require('mysql2');
 
 const pool = mysql.createPool({
   host: 'localhost',
-  user: 'root',
-  password: 'root',
+  user: 'millets_db_user',
+  password: '(*%GyD3v$q79#FHg',
   connectionLimit: 10
 });
 
@@ -28,13 +28,13 @@ const connectDB = () => {
 
 const createDatabase = (connection) => {
   return new Promise((resolve, reject) => {
-    connection.query('CREATE DATABASE IF NOT EXISTS millets_backend', (err) => {
+    connection.query('CREATE DATABASE IF NOT EXISTS millets_backend_db', (err) => {
       if (err) {
         reject(err);
         return;
       }
       console.log('Database created or already exists.');
-      connection.changeUser({ database: 'millets_backend' }, (err) => {
+      connection.changeUser({ database: 'millets_backend_db' }, (err) => {
         if (err) {
           reject(err);
           return;

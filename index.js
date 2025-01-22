@@ -6,7 +6,7 @@ const path = require('path');
 
 const { connectDB } = require('./db');
 const app = express();
-const port = 4000;
+const port = 5000;
  
 app.use(cors({
   origin: (origin, callback) => {
@@ -20,8 +20,7 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type']
-}));
-
+})); 
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
