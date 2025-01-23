@@ -1,4 +1,8 @@
 const { Order } = require('../models/milletorders.model'); 
+ 
+const generateOrderId = () => {
+  return Math.random().toString(36).substring(2, 10).toUpperCase();
+};
 
 const createOrder = (req, res) => {
   const { user_id, products, total_mrp, discount_on_mrp, total_amount } = req.body;
@@ -14,13 +18,16 @@ const createOrder = (req, res) => {
   }
 
   const productsString = products.join(',');
+ 
+  const orderId = generateOrderId();
 
   const newOrder = { 
     user_id, 
     products: productsString, 
     total_mrp, 
     discount_on_mrp: discount, 
-    total_amount 
+    total_amount,
+    order_id: orderId  
   };
 
   Order.create(newOrder, (err, result) => {
@@ -29,7 +36,8 @@ const createOrder = (req, res) => {
     }
     res.status(201).json({
       message: 'Order created successfully.',
-      orderId: result.insertId,
+      orderId: result.insertId,   
+      randomOrderId: orderId,     
     });
   });
 };
