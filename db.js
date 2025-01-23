@@ -2,8 +2,7 @@ const mysql = require('mysql2');
 
 const pool = mysql.createPool({
   user: 'millets_db_user',
-  password: '(*%GyD3v$q79#FHg',
-  password: 'root',
+  password: '(*%GyD3v$q79#FHg', 
   connectionLimit: 10
 });
 
