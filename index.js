@@ -10,7 +10,7 @@ const port = 5000;
  
 app.use(cors({
   origin: (origin, callback) => {
-    const allowedOrigins = ['http://localhost:5173', 'http://98.130.40.135'];
+    const allowedOrigins = ['http://localhost:5173', 'https://milletioglobalgrain.in/'];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
