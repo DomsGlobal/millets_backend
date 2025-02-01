@@ -118,7 +118,7 @@ const createOrder = (req, res) => {
             return res.status(500).json({ message: 'Error creating order.', error: err });
           }
 
-          const productQuery = 'SELECT id, name, price, original_price, discount, image FROM milletproducts WHERE id IN (?)';
+          const productQuery = 'SELECT id, name, price, discount, image FROM milletproducts WHERE id IN (?)';
           connection.query(productQuery, [products.map(id => parseInt(id))], async (err, productResults) => {
             if (err) {
               return res.status(500).json({ message: 'Error fetching products.', error: err });
@@ -137,7 +137,7 @@ const createOrder = (req, res) => {
                 name: product.name,
                 price: product.price,
                 discount: product.discount,
-                original_price: product.original_price,
+             
                 quantity: quantity,
                 imageUrl: imageUrl, 
               };
@@ -149,8 +149,7 @@ const createOrder = (req, res) => {
                 <tr style="background-color: #f2f2f2;">
                   <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Image</th>
                   <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Product</th>
-                  <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Quantity</th> 
-                  <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">original_price</th>
+                  <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Quantity</th>  
                   <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">discount</th>
                     <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Price</th>
                 </tr>
@@ -162,8 +161,7 @@ const createOrder = (req, res) => {
                       <img src="${item.imageUrl}" alt="${item.name}" style="width: 80px; height: auto; border-radius: 5px;">
                     </td>
                     <td style="border: 1px solid #ddd; padding: 8px;">${item.name}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.quantity}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.original_price}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.quantity}</td> 
                     <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.discount}</td>
                     <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.price}</td>
                   </tr>
@@ -191,7 +189,7 @@ const createOrder = (req, res) => {
           `;
  
             const sellerEmailResponse = await sendEmail({
-              to: 'reaper.slayer.71@gmail.com', 
+              to: 'mohankrishnaj007@gmail.com', 
               subject: `New Order Received - Order # ${orderId}`,  
               body: sellerEmailBody,
             });
