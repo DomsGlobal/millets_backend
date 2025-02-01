@@ -5,6 +5,7 @@ const createOrdersTableQuery = `
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL, 
     products TEXT NOT NULL,
+    quantities TEXT DEFAULT NULL,  -- Add quantities field, stored as text
     total_mrp DECIMAL(10, 2) NOT NULL, 
     discount_on_mrp DECIMAL(10, 2) DEFAULT NULL,  -- Make discount_on_mrp optional
     total_amount DECIMAL(10, 2) NOT NULL,
@@ -36,11 +37,16 @@ const Order = {
       if (err) {
         console.error('Error getting connection: ' + err.stack);
         return;
-      } 
-      const query = 'INSERT INTO milletorders (user_id, products, total_mrp, discount_on_mrp, total_amount, order_id) VALUES (?, ?, ?, ?, ?, ?)';
+      }
+      const query = 'INSERT INTO milletorders (user_id, products, quantities, total_mrp, discount_on_mrp, total_amount, order_id) VALUES (?, ?, ?, ?, ?, ?, ?)';
+
+      // Ensure quantities is handled correctly (array to comma-separated string or null if not provided)
+      const quantities = orderData.quantities && Array.isArray(orderData.quantities) ? orderData.quantities.join(',') : null;
+
       connection.query(query, [
         orderData.user_id, 
         orderData.products, 
+        quantities,  // Add quantities here
         orderData.total_mrp, 
         orderData.discount_on_mrp, 
         orderData.total_amount,
@@ -51,7 +57,7 @@ const Order = {
       });
     });
   },
- 
+
   find: (callback) => {
     pool.getConnection((err, connection) => {
       if (err) {
@@ -65,7 +71,7 @@ const Order = {
       });
     });
   },
- 
+
   findById: (id, callback) => {
     pool.getConnection((err, connection) => {
       if (err) {
@@ -76,6 +82,36 @@ const Order = {
       connection.query(query, [id], (err, results) => {
         connection.release();
         callback(err, results.length > 0 ? results[0] : null);
+      });
+    });
+  },
+
+  // Delete all orders
+  deleteAll: (callback) => {
+    pool.getConnection((err, connection) => {
+      if (err) {
+        console.error('Error getting connection: ' + err.stack);
+        return;
+      }
+      const query = 'DELETE FROM milletorders';
+      connection.query(query, (err, result) => {
+        connection.release();
+        callback(err, result);
+      });
+    });
+  },
+
+  // Delete an order by its ID
+  deleteById: (id, callback) => {
+    pool.getConnection((err, connection) => {
+      if (err) {
+        console.error('Error getting connection: ' + err.stack);
+        return;
+      }
+      const query = 'DELETE FROM milletorders WHERE id = ?';
+      connection.query(query, [id], (err, result) => {
+        connection.release();
+        callback(err, result);
       });
     });
   }
