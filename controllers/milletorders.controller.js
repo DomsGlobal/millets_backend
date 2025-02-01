@@ -128,23 +128,20 @@ const createOrder = (req, res) => {
             const productDetails = productResults.map(product => {
               const productIndex = products.findIndex(prodId => parseInt(prodId) === product.id);
               const quantity = productIndex !== -1 ? quantities[productIndex] : 0;
-            
-              // Calculate the discounted price
-              const discountAmount = discount ? (product.price * discount) / 100 : 0;  // Apply discount as percentage
-              const discountedPrice = product.price - discountAmount;  // Calculate the final price after discount
-            
+              
               const imageUrl = product.image ? `https://api.milletioglobalgrain.in/${product.image}` : 'https://api.milletioglobalgrain.in/uploads/default-image.jpg'; // Fallback image URL
               
               console.log('Image URL:', imageUrl);
-            
+              
               return {
                 name: product.name,
-                price: discountedPrice.toFixed(2),  // Show discounted price
+                price: product.price,
+                discount: product.discount,
+                original_price: product.original_price,
                 quantity: quantity,
                 imageUrl: imageUrl, 
               };
             });
-            
              
             const productDetailsHtml = `
             <table style="width: 100%; border-collapse: collapse; text-align: left; font-family: Arial, sans-serif;">
@@ -154,6 +151,8 @@ const createOrder = (req, res) => {
                   <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Product</th>
                   <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Quantity</th>
                   <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Price</th>
+                  <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">original_price</th>
+                  <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">discount</th>
                 </tr>
               </thead>
               <tbody>
@@ -164,6 +163,8 @@ const createOrder = (req, res) => {
                     </td>
                     <td style="border: 1px solid #ddd; padding: 8px;">${item.name}</td>
                     <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.quantity}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.original_price}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.discount}</td>
                     <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.price}</td>
                   </tr>
                 `).join('')}
