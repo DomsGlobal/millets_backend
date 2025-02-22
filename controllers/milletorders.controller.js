@@ -45,6 +45,51 @@ const sendEmail = async (emailData) => {
   }
 };
 
+
+const contactForm = async (req, res) => {
+  const { name, phone, email, message } = req.body;
+
+  if (!name || !phone || !email || !message) {
+    return res.status(400).json({
+      message: "Name, phone, email, and message are required."
+    });
+  }
+
+  const emailContent = `
+    <h1>New Contact Request</h1>
+    <p><strong>Name:</strong> ${name}</p>
+    <p><strong>Phone:</strong> ${phone}</p>
+    <p><strong>Email:</strong> ${email}</p>
+    <p><strong>Message:</strong> ${message}</p>
+  `;
+
+  const emailData = {
+    to: "Milletioglobalgrain@gmail.com",
+    subject: "New Contact Request Received",
+    body: emailContent,
+  };
+
+  try {
+    const emailResponse = await sendEmail(emailData);
+    if (emailResponse.success) {
+      return res.status(200).json({
+        message: "Email sent successfully",
+        info: emailResponse.info
+      });
+    } else {
+      return res.status(500).json({
+        message: "Failed to send email",
+        error: emailResponse.error
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      message: "An error occurred while sending the email",
+      error: error.message
+    });
+  }
+};
+
 const createOrder = (req, res) => {
   const { user_id, products, quantities, total_mrp, discount_on_mrp, total_amount } = req.body;
 
@@ -61,7 +106,7 @@ const createOrder = (req, res) => {
   const quantitiesString = (quantities && Array.isArray(quantities)) ? quantities.join(',') : null;
   const productsString = products.join(',');
   const orderId = generateOrderId();
-  const orderDate = new Date().toLocaleString(); // Get current date and time
+  const orderDate = new Date().toLocaleString();  
 
   pool.getConnection((err, connection) => {
     if (err) {
@@ -188,8 +233,8 @@ const createOrder = (req, res) => {
             <p>Please prepare the order for shipment and ensure it reaches the customer within the expected timeframe.</p>
           `;
  
-            const sellerEmailResponse = await sendEmail({
-              to: 'mohankrishnaj007@gmail.com', 
+            const sellerEmailResponse = await sendEmail({ 
+              to: 'Milletioglobalgrain@gmail.com', 
               subject: `New Order Received - Order # ${orderId}`,  
               body: sellerEmailBody,
             });
@@ -261,4 +306,4 @@ const deleteOrderById = (req, res) => {
   });
 };
 
-module.exports = { createOrder, sendEmail, deleteAllOrders, deleteOrderById };
+module.exports = { createOrder, sendEmail, deleteAllOrders, deleteOrderById, contactForm };
