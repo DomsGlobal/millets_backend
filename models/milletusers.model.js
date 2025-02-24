@@ -1,29 +1,29 @@
 const { pool } = require('../db');  
 
-const createUsersTableQuery = `
-  CREATE TABLE IF NOT EXISTS milletusers ( 
+const createUserTableQuery = `
+  CREATE TABLE IF NOT EXISTS user ( 
     id INT AUTO_INCREMENT PRIMARY KEY, 
-    phone_number VARCHAR(20) NOT NULL UNIQUE,  -- Ensure phone number is unique
-    email VARCHAR(255) NOT NULL, 
-    address VARCHAR(255) NOT NULL, 
-    floor INT NULL,
-    tag VARCHAR(50) NULL  -- Optional field for additional user information
+    name VARCHAR(100) NOT NULL, 
+    email VARCHAR(255) NOT NULL UNIQUE, 
+    phone VARCHAR(20) NOT NULL UNIQUE, 
+    password VARCHAR(255) NOT NULL, 
+    token VARCHAR(255) NULL  -- Optional token field for authentication
   )
 `;
 
-const createMilletUsersTable = () => {
+const createUserTable = () => {
   pool.getConnection((err, connection) => {  
     if (err) {
       console.error('Error getting connection: ' + err.stack);
       return;
     }
-    connection.query(createUsersTableQuery, (err) => { 
+    connection.query(createUserTableQuery, (err) => { 
       connection.release();  
       if (err) {
-        console.error('Error creating milletusers table: ' + err.stack);
+        console.error('Error creating user table: ' + err.stack);
         return;
       }
-      console.log('Milletusers table created or already exists.');
+      console.log('User table created or already exists.');
     });
   });
 };
@@ -36,13 +36,13 @@ const User = {
         return;
       }
 
-      const query = 'INSERT INTO milletusers (phone_number, email, address, floor, tag) VALUES (?, ?, ?, ?, ?)';
+      const query = 'INSERT INTO user (name, email, phone, password, token) VALUES (?, ?, ?, ?, ?)';
       connection.query(query, [
-        userData.phone_number,
+        userData.name,
         userData.email,
-        userData.address,
-        userData.floor || null,
-        userData.tag || null,
+        userData.phone,
+        userData.password,
+        userData.token || null,
       ], (err, result) => {
         connection.release();  
         callback(err, result);
@@ -51,4 +51,4 @@ const User = {
   }
 };
 
-module.exports = { User, createMilletUsersTable };
+module.exports = { User, createUserTable };

@@ -43,24 +43,27 @@ const milletuserRoutes = require('./routes/milletusers.routes');
 const milletProductsRoutes = require('./routes/milletproducts.routes');
 const milletordersRoutes = require('./routes/milletorders.routes');
 const milletcontactRoutes = require('./routes/milletcontact.routes');
+const milletaddressRoutes = require('./routes/address.routes');
  
 app.use('/api', orderRoutes);
 
-app.use('/api', milletuserRoutes);
+app.use('/api/users', milletuserRoutes);
 app.use('/api', milletProductsRoutes);
 app.use('/api', milletordersRoutes);
 app.use('/api', milletcontactRoutes);
+app.use('/api', milletaddressRoutes);
  
 app.use('/uploads', express.static('uploads'));
 
-const { createMilletUsersTable } = require('./models/milletusers.model');
+const { createUserTable } = require('./models/milletusers.model');
 const { createMilletProductsTable } = require('./models/milletproducts.model');
 const { createMilletOrdersTable } = require('./models/milletorders.model');
 const { createMilletContactTable } = require('./models/milletcontact.model');
+const { createAddressTable } = require('./models/address.model');
  
 connectDB()
   .then(() => {
-    return Promise.all([ createMilletUsersTable(), createMilletProductsTable(), createMilletOrdersTable(), createMilletContactTable()]);
+    return Promise.all([ createUserTable(), createMilletProductsTable(), createMilletOrdersTable(), createMilletContactTable(), createAddressTable()]);
   })
   .then(() => {
     app.listen(port, () => {
