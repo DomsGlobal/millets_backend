@@ -19,7 +19,7 @@ const port = 5000;
 //   },
 //   credentials: true,
 //   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-//   allowedHeaders: ['Content-Type']
+//   allowedHeaders: ['Content-Type']-
 // })); 
 
 app.use(cors({ origin: false }));
@@ -44,6 +44,8 @@ const milletProductsRoutes = require('./routes/milletproducts.routes');
 const milletordersRoutes = require('./routes/milletorders.routes');
 const milletcontactRoutes = require('./routes/milletcontact.routes');
 const milletaddressRoutes = require('./routes/address.routes');
+const milletcartRoutes = require('./routes/cart.routes');
+const adminRoutes = require('./routes/admin.routes');
  
 app.use('/api', orderRoutes);
 
@@ -52,6 +54,8 @@ app.use('/api', milletProductsRoutes);
 app.use('/api', milletordersRoutes);
 app.use('/api', milletcontactRoutes);
 app.use('/api', milletaddressRoutes);
+app.use('/api', milletcartRoutes);
+app.use('/api', adminRoutes);
  
 app.use('/uploads', express.static('uploads'));
 
@@ -60,10 +64,13 @@ const { createMilletProductsTable } = require('./models/milletproducts.model');
 const { createMilletOrdersTable } = require('./models/milletorders.model');
 const { createMilletContactTable } = require('./models/milletcontact.model');
 const { createAddressTable } = require('./models/address.model');
+const { createCartTable } = require('./models/cart.model');
+const { createOtpTable } = require('./models/otp.model');
+const { createAdminsTable } = require('./models/admin.model');
  
 connectDB()
   .then(() => {
-    return Promise.all([ createUserTable(), createMilletProductsTable(), createMilletOrdersTable(), createMilletContactTable(), createAddressTable()]);
+    return Promise.all([ createUserTable(), createMilletProductsTable(), createMilletOrdersTable(), createMilletContactTable(), createAddressTable, createCartTable(), createOtpTable(), createAdminsTable()]);
   })
   .then(() => {
     app.listen(port, () => {

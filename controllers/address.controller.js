@@ -1,6 +1,5 @@
 const { pool } = require('../db');
-
-// Create Address (Already Implemented)
+ 
 const createAddress = (req, res) => {
   const { user_id, phone_number, email, address, floor, tag, pin_code } = req.body;
 
@@ -38,8 +37,7 @@ const createAddress = (req, res) => {
     );
   });
 };
-
-// Get Addresses by User ID
+ 
 const getAddressesByUserId = (req, res) => {
   const { user_id } = req.params;
 
@@ -75,4 +73,39 @@ const getAddressesByUserId = (req, res) => {
   });
 };
 
-module.exports = { createAddress, getAddressesByUserId };
+const getAddressByUserIdAndAddressId = (req, res) => {
+  const { userId, addressId } = req.params;
+
+  if (!userId || !addressId) {
+    return res.status(400).json({ message: 'User ID and Address ID are required.' });
+  }
+
+  pool.getConnection((err, connection) => {
+    if (err) {
+      console.error('Error getting connection:', err.stack);
+      return res.status(500).json({ message: 'Database connection error', error: err });
+    }
+
+    const selectQuery = `SELECT * FROM address WHERE user_id = ? AND id = ?`;
+
+    connection.query(selectQuery, [userId, addressId], (err, results) => {
+      connection.release();
+
+      if (err) {
+        console.error('Error fetching address:', err);
+        return res.status(500).json({ message: 'Error retrieving address.', error: err });
+      }
+
+      if (results.length === 0) {
+        return res.status(404).json({ message: 'No address found for this user with the given address ID.' });
+      }
+
+      res.status(200).json({
+        message: 'Address retrieved successfully.',
+        address: results[0],
+      });
+    });
+  });
+};
+
+module.exports = { createAddress, getAddressesByUserId, getAddressByUserIdAndAddressId };
