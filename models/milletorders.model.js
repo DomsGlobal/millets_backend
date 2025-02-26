@@ -13,7 +13,7 @@ const createOrdersTableQuery = `
     order_id VARCHAR(12) NOT NULL UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES milletusers(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
     FOREIGN KEY (address_id) REFERENCES address(id) ON DELETE CASCADE,
     INDEX idx_user_id (user_id),
     INDEX idx_order_id (order_id)

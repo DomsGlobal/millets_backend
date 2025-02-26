@@ -104,7 +104,7 @@ const createOrder = (req, res) => {
   pool.getConnection((err, connection) => {
     if (err) return res.status(500).json({ message: 'Database connection error', error: err });
 
-    const userQuery = 'SELECT email, phone_number, address, floor, tag FROM milletusers WHERE id = ?';
+    const userQuery = 'SELECT email, phone FROM user WHERE id = ?';
     connection.query(userQuery, [user_id], (err, userResults) => {
       if (err) {
         connection.release();
@@ -118,128 +118,142 @@ const createOrder = (req, res) => {
 
       const user = userResults[0];
 
-      const orderQuery = `
-        INSERT INTO milletorders (user_id, address_id, products, total_mrp, discount_on_mrp, total_amount, order_status, order_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-
-      connection.query(orderQuery, [
-        user_id,
-        address_id,
-        formattedProducts,
-        total_mrp,
-        discount_on_mrp || null,
-        total_amount,
-        'pending',
-        orderId
-      ], (err, result) => {
+      // Fetch address separately
+      const addressQuery = 'SELECT address, floor, tag FROM address WHERE id = ? AND user_id = ?';
+      connection.query(addressQuery, [address_id, user_id], (err, addressResults) => {
         if (err) {
           connection.release();
-          return res.status(500).json({ message: 'Error creating order.', error: err });
+          return res.status(500).json({ message: 'Error fetching address details.', error: err });
         }
 
-        const productIds = products.map(p => p.id);
-        const productQuery = 'SELECT id, name, price, discount, image FROM milletproducts WHERE id IN (?)';
+        const address = addressResults.length
+          ? addressResults[0]
+          : { address: 'Not Provided', floor: 'Not Provided', tag: 'Not Provided' };
 
-        connection.query(productQuery, [productIds], async (err, productResults) => {
-          connection.release();
+        // Insert order
+        const orderQuery = `
+          INSERT INTO milletorders (user_id, address_id, products, total_mrp, discount_on_mrp, total_amount, order_status, order_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
 
+        connection.query(orderQuery, [
+          user_id,
+          address_id,
+          formattedProducts,
+          total_mrp,
+          discount_on_mrp || null,
+          total_amount,
+          'pending',
+          orderId
+        ], (err, result) => {
           if (err) {
-            return res.status(500).json({ message: 'Error fetching product details.', error: err });
+            connection.release();
+            return res.status(500).json({ message: 'Error creating order.', error: err });
           }
 
-          // **Fixed Product Mapping with Correct Quantity Handling**
-          const productDetails = productResults.map(product => {
-            const productData = products.find(p => p.id === product.id);
-            return {
-              id: product.id,
-              name: product.name,
-              price: product.price,
-              discount: product.discount,
-              quantity: productData.quantity,
-              imageUrl: product.image
-                ? `https://api.milletioglobalgrain.in/${product.image}`
-                : 'https://api.milletioglobalgrain.in/uploads/default-image.jpg'
-            };
-          });
+          const productIds = products.map(p => p.id);
+          const productQuery = 'SELECT id, name, price, discount, image FROM milletproducts WHERE id IN (?)';
 
-          // **Kept Mail Templates Unchanged**
-          const productDetailsHtml = `
-            <table style="width: 100%; border-collapse: collapse; text-align: left; font-family: Arial, sans-serif;">
-              <thead>
-                <tr style="background-color: #f2f2f2;">
-                  <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Image</th>
-                  <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Product</th>
-                  <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Quantity</th>  
-                  <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Discount</th>
-                  <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Price</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${productDetails.map(item => `
-                  <tr>
-                    <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">
-                      <img src="${item.imageUrl}" alt="${item.name}" style="width: 80px; height: auto; border-radius: 5px;">
-                    </td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${item.name}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.quantity}</td> 
-                    <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.discount}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.price}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          `;
+          connection.query(productQuery, [productIds], async (err, productResults) => {
+            connection.release();
 
-          // **Seller Email**
-          const sellerEmailBody = `
-            <h1>New Order Received - Order # ${orderId}</h1>
-            <p><strong>Order Date:</strong> ${orderDate}</p>
-            <h3>Customer Details:</h3>
-            <ul>
-              <li><strong>Email:</strong> ${user.email}</li>
-              <li><strong>Phone:</strong> ${user.phone_number}</li>
-              <li><strong>Shipping Address:</strong> ${user.address}, Floor: ${user.floor || 'Not Provided'}</li>
-              <li><strong>Tag:</strong> ${user.tag || 'Not Provided'}</li>
-            </ul>
-            <h3>Ordered Products:</h3>
-            ${productDetailsHtml}
-            <h3>Total Amount: ${total_amount}</h3>  
-            <p>Please prepare the order for shipment and ensure it reaches the customer within the expected timeframe.</p>
-          `;
+            if (err) {
+              return res.status(500).json({ message: 'Error fetching product details.', error: err });
+            }
 
-          const sellerEmailResponse = await sendEmail({
-            to: 'kramsai122000@gmail.com',
-            subject: `New Order Received - Order # ${orderId}`,
-            body: sellerEmailBody,
-          });
+            const productDetails = productResults.map(product => {
+              const productData = products.find(p => p.id === product.id);
+              return {
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                discount: product.discount,
+                quantity: productData.quantity,
+                imageUrl: product.image
+                  ? `https://api.milletioglobalgrain.in/${product.image}`
+                  : 'https://api.milletioglobalgrain.in/uploads/default-image.jpg'
+              };
+            });
 
-          // **Customer Email**
-          const customerEmailBody = `
-            <h1>Order Confirmation - Order # ${orderId}</h1>
-            <p><strong>Order Date:</strong> ${orderDate}</p>
-            <h3>Ordered Products:</h3>
-            ${productDetailsHtml}
-            <h3>Total Amount: ${total_amount}</h3> 
-            <p>Thank you for shopping with us! Your order will be processed soon.</p>
-          `;
+            // **Seller Email**
+            const sellerEmailBody = `
+              <h1>New Order Received - Order # ${orderId}</h1>
+              <p><strong>Order Date:</strong> ${orderDate}</p>
+              <h3>Customer Details:</h3>
+              <ul>
+                <li><strong>Email:</strong> ${user.email}</li>
+                <li><strong>Phone:</strong> ${user.phone}</li>
+                <li><strong>Shipping Address:</strong> ${address.address}, Floor: ${address.floor}</li>
+                <li><strong>Tag:</strong> ${address.tag}</li>
+              </ul>
+              <h3>Ordered Products:</h3>
+              ${generateProductTable(productDetails)}
+              <h3>Total Amount: ${total_amount}</h3>  
+              <p>Please prepare the order for shipment and ensure it reaches the customer within the expected timeframe.</p>
+            `;
 
-          const customerEmailResponse = await sendEmail({
-            to: user.email,
-            subject: `Order Confirmation from Milletio`,
-            body: customerEmailBody,
-          });
+            await sendEmail({
+              to: 'kramsai122000@gmail.com',
+              subject: `New Order Received - Order # ${orderId}`,
+              body: sellerEmailBody,
+            });
 
-          res.status(201).json({
-            message: 'Order created successfully.',
-            orderId: result.insertId,
-            randomOrderId: orderId,
-            emailStatus: { sellerEmailResponse, customerEmailResponse }
+            // **Customer Email**
+            const customerEmailBody = `
+              <h1>Order Confirmation - Order # ${orderId}</h1>
+              <p><strong>Order Date:</strong> ${orderDate}</p>
+              <h3>Ordered Products:</h3>
+              ${generateProductTable(productDetails)}
+              <h3>Total Amount: ${total_amount}</h3> 
+              <p>Thank you for shopping with us! Your order will be processed soon.</p>
+            `;
+
+            await sendEmail({
+              to: user.email,
+              subject: `Order Confirmation from Milletio`,
+              body: customerEmailBody,
+            });
+
+            res.status(201).json({
+              message: 'Order created successfully.',
+              orderId: result.insertId,
+              randomOrderId: orderId,
+            });
           });
         });
       });
     });
   });
+};
+
+// Helper function to generate product table HTML
+const generateProductTable = (products) => {
+  return `
+    <table style="width: 100%; border-collapse: collapse; text-align: left; font-family: Arial, sans-serif;">
+      <thead>
+        <tr style="background-color: #f2f2f2;">
+          <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Image</th>
+          <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Product</th>
+          <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Quantity</th>  
+          <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Discount</th>
+          <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${products.map(item => `
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">
+              <img src="${item.imageUrl}" alt="${item.name}" style="width: 80px; height: auto; border-radius: 5px;">
+            </td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${item.name}</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.quantity}</td> 
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.discount}</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.price}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
 };
  
 
