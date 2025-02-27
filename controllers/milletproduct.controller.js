@@ -93,6 +93,10 @@ const updateProductById = (req, res) => {
   const { name, description, stars, price, discount, original_price, ingredient, allergens, tag } = req.body;
  
   const image = req.file ? `uploads/${req.file.filename}` : null;
+ 
+  if (!name && !description && !stars && !price && !discount && !original_price && !ingredient && !allergens && !tag && !req.file) {
+    return res.status(400).json({ message: 'At least one value must be provided to update the product.' });
+  }
 
   Product.findById(id, (err, existingProduct) => {
     if (err) {
@@ -122,7 +126,44 @@ const updateProductById = (req, res) => {
       if (result.affectedRows === 0) {
         return res.status(404).json({ message: 'Product not found.' });
       }
-      res.status(200).json({ message: 'Product updated successfully.' });
+
+      // Determine which fields were actually updated and return them in the response
+      let updatedFields = {};
+      if (ingredient !== undefined && ingredient !== existingProduct.ingredient) {
+        updatedFields.ingredient = ingredient;
+      }
+      if (name !== undefined && name !== existingProduct.name) {
+        updatedFields.name = name;
+      }
+      if (description !== undefined && description !== existingProduct.description) {
+        updatedFields.description = description;
+      }
+      if (stars !== undefined && stars !== existingProduct.stars) {
+        updatedFields.stars = stars;
+      }
+      if (price !== undefined && price !== existingProduct.price) {
+        updatedFields.price = price;
+      }
+      if (discount !== undefined && discount !== existingProduct.discount) {
+        updatedFields.discount = discount;
+      }
+      if (original_price !== undefined && original_price !== existingProduct.original_price) {
+        updatedFields.original_price = original_price;
+      }
+      if (allergens !== undefined && allergens !== existingProduct.allergens) {
+        updatedFields.allergens = allergens;
+      }
+      if (tag !== undefined && tag !== existingProduct.tag) {
+        updatedFields.tag = tag;
+      }
+      if (req.file) {
+        updatedFields.image = image;
+      }
+
+      res.status(200).json({
+        message: 'Product updated successfully.',
+        updatedFields: updatedFields
+      });
     });
   });
 };

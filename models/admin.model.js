@@ -11,7 +11,7 @@ const createAdminsTableQuery = `
   )
 `;
 
-
+  
 const createAdminsTable = () => {
   pool.getConnection((err, connection) => {  
     if (err) {

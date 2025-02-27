@@ -123,15 +123,32 @@ const Product = {
         console.error('Error getting connection: ' + err.stack);
         return;
       }
-      const { name, description, image, stars, price, discount } = updatedData;
-      const query = 'UPDATE milletproducts SET name = ?, description = ?, image = ?, stars = ?, price = ?, discount = ? WHERE id = ?';
-      connection.query(query, [name, description, image, stars, price, discount, id], (err, result) => {
+   
+      const { name, description, image, stars, price, discount, original_price, ingredient, allergens, tag } = updatedData;
+   
+      const query = `
+        UPDATE milletproducts 
+        SET 
+          name = ?, 
+          description = ?, 
+          image = ?, 
+          stars = ?, 
+          price = ?, 
+          discount = ?, 
+          original_price = ?, 
+          ingredient = ?, 
+          allergens = ?, 
+          tag = ? 
+        WHERE id = ?
+      `;
+  
+      connection.query(query, [name, description, image, stars, price, discount, original_price, ingredient, allergens, tag, id], (err, result) => {
         connection.release();
         callback(err, result);
       });
     });
   }
-};
+  };
 
 
 module.exports = { Product, createMilletProductsTable };

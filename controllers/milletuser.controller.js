@@ -54,8 +54,7 @@ const register = (req, res) => {
 
   pool.getConnection((err, connection) => {
     if (err) return res.status(500).json({ message: 'Failed to connect to database. Please try again later.' });
-
-    // Check if email already exists in user table
+ 
     const checkEmailUserQuery = 'SELECT * FROM user WHERE email = ?';
     connection.query(checkEmailUserQuery, [email], (err, userEmailResults) => {
       if (err) {
@@ -67,8 +66,7 @@ const register = (req, res) => {
         connection.release();
         return res.status(409).json({ message: 'Email already in use in user table. Please choose a different email.' });
       }
-
-      // Check if email already exists in admins table
+ 
       const checkEmailAdminQuery = 'SELECT * FROM admins WHERE email = ?';
       connection.query(checkEmailAdminQuery, [email], (err, adminEmailResults) => {
         if (err) {
@@ -93,8 +91,7 @@ const register = (req, res) => {
             connection.release();
             return res.status(409).json({ message: 'Phone number already in use in user table. Please choose a different one.' });
           }
-
-          // Check if phone number already exists in admins table
+ 
           const checkPhoneAdminQuery = 'SELECT * FROM admins WHERE phone = ?';
           connection.query(checkPhoneAdminQuery, [phone], (err, phoneAdminResults) => {
             if (err) {
@@ -106,19 +103,16 @@ const register = (req, res) => {
               connection.release();
               return res.status(409).json({ message: 'Phone number already in use in admin table. Please choose a different one.' });
             }
-
-            // Generate OTP and send email
-            const otp = Math.floor(100000 + Math.random() * 900000); // Generate a 6-digit OTP
-            const otpExpiration = new Date(Date.now() + 15 * 60 * 1000); // OTP expires in 15 minutes
-
-            // Save OTP to database with role as "customer"
+ 
+            const otp = Math.floor(100000 + Math.random() * 900000); 
+            const otpExpiration = new Date(Date.now() + 15 * 60 * 1000);  
+ 
             Otp.create(email, otp, otpExpiration, 'customer', (err, result) => {
               if (err) {
                 console.error('Error saving OTP:', err);
                 return res.status(500).json({ message: 'Error saving OTP. Please try again.' });
               }
-
-              // Send OTP email
+ 
               const emailData = {
                 to: email,
                 subject: 'Your OTP for Registration',
@@ -126,11 +120,10 @@ const register = (req, res) => {
               };
 
               sendEmail(emailData).then((emailResponse) => {
-                if (emailResponse.success) {
-                  // OTP sent successfully
+                if (emailResponse.success) { 
                   res.status(200).json({
                     message: 'OTP sent successfully. Please verify your OTP.',
-                    otpExpiration, // Optionally, include OTP expiration time
+                    otpExpiration,  
                   });
                 } else {
                   return res.status(500).json({ message: 'Error sending OTP. Please try again.' });
@@ -154,8 +147,7 @@ const verifyOtpAndRegister = (req, res) => {
   if (!name || !email || !phone || !password || !otp) {
     return res.status(400).json({ message: 'All fields are required.' });
   }
-
-  // Verify the OTP and get the role from the OTP table
+ 
   Otp.verify(email, otp, (err, otpResults) => {
     if (err) {
       console.error('Error verifying OTP:', err);
@@ -165,11 +157,9 @@ const verifyOtpAndRegister = (req, res) => {
     if (otpResults.length === 0) {
       return res.status(400).json({ message: 'Invalid OTP or OTP has expired.' });
     }
-
-    // Get the role from OTP results
-    const role = otpResults[0].role;  // This will be either 'admin' or 'customer'
-
-    // Proceed to hash the password
+ 
+    const role = otpResults[0].role;  
+ 
     bcrypt.hash(password, 10, (err, hash) => {
       if (err) {
         return res.status(500).json({ message: 'Error securing your password. Please try again.' });
@@ -184,8 +174,7 @@ const verifyOtpAndRegister = (req, res) => {
           return res.status(500).json({ message: 'Failed to connect to database. Please try again later.' });
         }
 
-        // Check if phone number already exists
-        const checkPhoneQuery = 'SELECT * FROM user WHERE phone = ?';
+         const checkPhoneQuery = 'SELECT * FROM user WHERE phone = ?';
         connection.query(checkPhoneQuery, [phone], (err, phoneResults) => {
           if (err) {
             connection.release();
@@ -197,8 +186,7 @@ const verifyOtpAndRegister = (req, res) => {
             return res.status(409).json({ message: 'Phone number already in use. Please choose a different one.' });
           }
 
-          // Insert the new user without the role column (because it's stored in OTP table)
-          const insertUserQuery = 'INSERT INTO user (name, email, phone, password, token) VALUES (?, ?, ?, ?, ?)';
+           const insertUserQuery = 'INSERT INTO user (name, email, phone, password, token) VALUES (?, ?, ?, ?, ?)';
           connection.query(insertUserQuery, [newUser.name, newUser.email, newUser.phone, newUser.password, newUser.token], (err, result) => {
             connection.release();
             if (err) {
@@ -210,7 +198,7 @@ const verifyOtpAndRegister = (req, res) => {
               message: 'Registration successful!',
               userId: result.insertId,
               token: newUser.token,
-              role: role,  // Include role in the response
+              role: role,  
             });
           });
         });
@@ -230,62 +218,101 @@ const login = (req, res) => {
 
   pool.getConnection((err, connection) => {
     if (err) return res.status(500).json({ message: 'Database connection error' });
-
-    const query = 'SELECT * FROM user WHERE email = ?';
-    connection.query(query, [email], (err, results) => {
-      connection.release();
-      if (err) return res.status(500).json({ message: 'Error fetching user' });
-
-      if (results.length === 0) {
-        return res.status(401).json({ message: 'Incorrect email or password. Please try again.' });
-      }
-
-      const user = results[0];
-      console.log('Stored Hash:', user.password);
-      console.log('Entered Password:', password);
-
-      bcrypt.compare(password, user.password, (err, isMatch) => {
-        if (err) return res.status(500).json({ message: 'Error verifying password' });
-
-        console.log('Password Match:', isMatch);
-        if (!isMatch) {
-          return res.status(401).json({ message: 'Incorrect email or password. Please try again.' });
-        }
  
-        const token = jwt.sign(
-          { email: user.email, phone: user.phone, role: 'customer' },
-          SECRET_KEY,
-          { expiresIn: '1h' }
-        );
+    const queryAdmin = 'SELECT * FROM admins WHERE email = ?';
+    connection.query(queryAdmin, [email], (err, adminResults) => {
+      if (err) return res.status(500).json({ message: 'Error fetching admin' });
  
-        if (!token) {
-          return res.status(500).json({ message: 'Error generating token' });
-        }
+      if (adminResults.length > 0) {
+        const admin = adminResults[0];
+        bcrypt.compare(password, admin.password, (err, isMatch) => {
+          if (err) return res.status(500).json({ message: 'Error verifying password' });
 
-        pool.getConnection((err, connection) => {
-          if (err) return res.status(500).json({ message: 'Database connection error' });
+          if (!isMatch) {
+            return res.status(401).json({ message: 'Incorrect email or password. Please try again.' });
+          }
 
-          const updateQuery = 'UPDATE user SET token = ? WHERE id = ?';
-          connection.query(updateQuery, [token, user.id], (err) => {
-            connection.release();
-            if (err) return res.status(500).json({ message: 'Error updating token' });
+          const token = jwt.sign(
+            { email: admin.email, role: 'admin' },
+            SECRET_KEY,
+            { expiresIn: '1h' }
+          );
 
-            res.status(200).json({
-              message: 'Login successful',
-              userId: user.id,
-              role: 'customer',
-              token, 
+          if (!token) {
+            return res.status(500).json({ message: 'Error generating token' });
+          }
+
+          pool.getConnection((err, connection) => {
+            if (err) return res.status(500).json({ message: 'Database connection error' });
+
+            const updateQuery = 'UPDATE admins SET token = ? WHERE id = ?';
+            connection.query(updateQuery, [token, admin.id], (err) => {
+              connection.release();
+              if (err) return res.status(500).json({ message: 'Error updating token' });
+
+              res.status(200).json({
+                message: 'Login successful',
+                userId: admin.id,
+                role: 'admin',
+                token,
+              });
             });
           });
         });
-      });
+      } else {
+        // If not found in admin, check the user table
+        const queryUser = 'SELECT * FROM user WHERE email = ?';
+        connection.query(queryUser, [email], (err, userResults) => {
+          if (err) return res.status(500).json({ message: 'Error fetching user' });
+
+          if (userResults.length === 0) {
+            return res.status(401).json({ message: 'Incorrect email or password. Please try again.' });
+          }
+
+          const user = userResults[0];
+          bcrypt.compare(password, user.password, (err, isMatch) => {
+            if (err) return res.status(500).json({ message: 'Error verifying password' });
+
+            if (!isMatch) {
+              return res.status(401).json({ message: 'Incorrect email or password. Please try again.' });
+            }
+
+            const token = jwt.sign(
+              { email: user.email, role: 'customer' },
+              SECRET_KEY,
+              { expiresIn: '1h' }
+            );
+
+            if (!token) {
+              return res.status(500).json({ message: 'Error generating token' });
+            }
+
+            pool.getConnection((err, connection) => {
+              if (err) return res.status(500).json({ message: 'Database connection error' });
+
+              const updateQuery = 'UPDATE user SET token = ? WHERE id = ?';
+              connection.query(updateQuery, [token, user.id], (err) => {
+                connection.release();
+                if (err) return res.status(500).json({ message: 'Error updating token' });
+
+                res.status(200).json({
+                  message: 'Login successful',
+                  userId: user.id,
+                  role: 'customer',
+                  token,
+                });
+              });
+            });
+          });
+        });
+      }
     });
   });
 };
 
 
 const logout = (req, res) => {
-  const { userId } = req.params; // Get userId from params
+  const { userId } = req.params; 
 
   if (!userId) {
     return res.status(400).json({ message: 'User ID is required for logout' });
@@ -362,7 +389,6 @@ const getUserById = (req, res) => {
 
       const user = results[0];
 
-      // Extract unique product IDs
       const productIds = user.product_ids ? [...new Set(user.product_ids.split(','))] : [];
 
       if (productIds.length === 0) {

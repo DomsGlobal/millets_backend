@@ -43,7 +43,7 @@ const sendEmail = async (emailData) => {
     console.error('Error in sendEmail:', error.message);
     return { success: false, message: "Failed to send email", error: error.message };
   }
-};
+}; 
 
 
 const contactForm = async (req, res) => {
@@ -64,7 +64,7 @@ const contactForm = async (req, res) => {
   `;
 
   const emailData = {
-    to: "Milletioglobalgrain@gmail.com",
+    to: "kramsai12200@gmail.com",
     subject: "New Contact Request Received",
     body: emailContent,
   };
@@ -359,16 +359,14 @@ const getAllOrders = (req, res) => {
       if (orders.length === 0) {
         return res.status(404).json({ message: "No orders found." });
       }
-
-      // Fetch user and address details along with the products for each order
+ 
       const ordersWithDetailsPromises = orders.map(order => {
         return new Promise((resolve, reject) => {
-          // Fetch user details by user_id
+        
           connection.query('SELECT * FROM user WHERE id = ?', [order.user_id], (err, userResults) => {
             if (err) return reject(err);
             const user = userResults[0];
-
-            // Fetch address details by address_id
+ 
             connection.query('SELECT * FROM address WHERE id = ?', [order.address_id], (err, addressResults) => {
               if (err) return reject(err);
               const address = addressResults[0];
@@ -485,12 +483,10 @@ const getOrderByOrderId = (req, res) => {
       if (results.length === 0) {
         return res.status(404).json({ message: `Order with ID ${orderId} not found.` });
       }
-
-      // Fetch product details for each product in the order
+ 
       const order = results[0];
-      const productIds = order.products.map(product => product.id);  // Extract product IDs
-
-      // Query to fetch product details for the given product IDs
+      const productIds = order.products.map(product => product.id);  
+ 
       const productQuery = `
         SELECT * FROM milletproducts WHERE id IN (?);
       `;
@@ -498,8 +494,7 @@ const getOrderByOrderId = (req, res) => {
         if (err) {
           return res.status(500).json({ message: "Error fetching product details.", error: err });
         }
-
-        // Map product details to order products, including quantity
+ 
         const productsWithDetails = order.products.map(product => {
           const productDetails = products.find(p => p.id === product.id);
           return {
@@ -514,8 +509,7 @@ const getOrderByOrderId = (req, res) => {
             stars: productDetails.stars
           };
         });
-
-        // Format the order response with product details
+ 
         const formattedOrder = {
           id: order.id,
           order_id: order.order_id,
@@ -549,5 +543,38 @@ const getOrderByOrderId = (req, res) => {
   });
 };
 
+
+const orderSummary = (req, res) => {
+  const currentMonth = new Date().getMonth() + 1; 
+  const currentYear = new Date().getFullYear(); 
+
+  const query = `
+    SELECT 
+      COUNT(*) AS total_orders,
+      SUM(CASE WHEN order_status = 'pending' THEN 1 ELSE 0 END) AS pending,
+      SUM(CASE WHEN order_status = 'processing' THEN 1 ELSE 0 END) AS processing,
+      SUM(CASE WHEN order_status = 'shipped' THEN 1 ELSE 0 END) AS shipped,
+      SUM(CASE WHEN order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered,
+      SUM(CASE WHEN order_status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+      (SELECT COUNT(*) FROM milletorders WHERE MONTH(created_at) = ? AND YEAR(created_at) = ?) AS total_orders_this_month
+    FROM milletorders;
+  `;
+
+  pool.query(query, [currentMonth, currentYear], (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Database error', error: err });
+    }
+
+    res.status(200).json({
+      total_orders: results[0].total_orders,
+      pending: results[0].pending,
+      processing: results[0].processing,
+      shipped: results[0].shipped,
+      delivered: results[0].delivered,
+      cancelled: results[0].cancelled,
+      total_orders_this_month: results[0].total_orders_this_month,
+    });
+  });
+};
   
-module.exports = { createOrder, sendEmail, deleteAllOrders, deleteOrderById, contactForm, updateOrderStatus, getAllOrders, getOrderByOrderId};
+module.exports = { createOrder, sendEmail, deleteAllOrders, deleteOrderById, contactForm, updateOrderStatus, getAllOrders, getOrderByOrderId, orderSummary};
