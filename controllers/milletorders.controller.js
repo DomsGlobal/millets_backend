@@ -90,6 +90,209 @@ const contactForm = async (req, res) => {
   }
 };
 
+
+const parseProducts = (products) => {
+  try {
+    if (typeof products === "string") {
+      const parsed = JSON.parse(products);
+      return Array.isArray(parsed) ? parsed : [];
+    } else if (Array.isArray(products)) {
+      return products;
+    } else if (typeof products === "object" && products !== null) {
+      return [products]; // If it's a single object, wrap it in an array
+    }
+  } catch (error) {
+    console.error("Error parsing products JSON:", error);
+  }
+  return [];
+};
+
+const getAllOrders = (req, res) => {
+  pool.getConnection((err, connection) => {
+    if (err) {
+      return res.status(500).json({ message: "Database connection error", error: err });
+    }
+
+    const query = "SELECT * FROM milletorders ORDER BY created_at DESC";
+
+    connection.query(query, async (err, orders) => {
+      connection.release();
+
+      if (err) {
+        return res.status(500).json({ message: "Error fetching orders.", error: err });
+      }
+
+      if (orders.length === 0) {
+        return res.status(404).json({ message: "No orders found." });
+      }
+
+      try {
+        const ordersWithDetails = await Promise.all(orders.map(async (order) => {
+          const [userResults] = await pool.promise().query("SELECT * FROM user WHERE id = ?", [order.user_id]);
+          const user = userResults[0];
+
+          const [addressResults] = await pool.promise().query("SELECT * FROM address WHERE id = ?", [order.address_id]);
+          const address = addressResults.length > 0 ? addressResults[0] : null;
+
+          const products = parseProducts(order.products);
+          const productIds = products.map((p) => p.id);
+          let productsWithDetails = [];
+
+          if (productIds.length > 0) {
+            const [productResults] = await pool.promise().query("SELECT * FROM milletproducts WHERE id IN (?)", [productIds]);
+
+            productsWithDetails = products.map((product) => {
+              const productDetails = productResults.find((p) => p.id === product.id);
+              return productDetails
+                ? {
+                    id: product.id,
+                    quantity: product.quantity,
+                    name: productDetails.name,
+                    description: productDetails.description,
+                    price: productDetails.price,
+                    discount: productDetails.discount,
+                    original_price: productDetails.original_price,
+                    image: productDetails.image,
+                    stars: productDetails.stars,
+                  }
+                : null;
+            }).filter(Boolean);
+          }
+
+          return {
+            id: order.id,
+            order_id: order.order_id,
+            user: user ? { id: user.id, name: user.name, email: user.email, phone: user.phone } : null,
+            address: address
+              ? {
+                  id: address.id,
+                  phone_number: address.phone_number,
+                  email: address.email,
+                  address: address.address,
+                  floor: address.floor,
+                  tag: address.tag,
+                  pin_code: address.pin_code,
+                }
+              : null,
+            products: productsWithDetails,
+            total_mrp: order.total_mrp,
+            discount_on_mrp: order.discount_on_mrp,
+            total_amount: order.total_amount,
+            order_status: order.order_status,
+            created_at: order.created_at,
+            updated_at: order.updated_at,
+          };
+        }));
+
+        return res.status(200).json({ message: "Orders retrieved successfully.", orders: ordersWithDetails });
+      } catch (error) {
+        return res.status(500).json({ message: "Error processing orders.", error });
+      }
+    });
+  });
+};
+
+ 
+
+const getOrderByOrderId = async (req, res) => {
+  const { orderId } = req.params;
+
+  if (!orderId) {
+    return res.status(400).json({ message: "Order ID is required." });
+  }
+
+  let connection;
+  try {
+    connection = await pool.promise().getConnection();
+
+    let query, queryParams;
+
+    if (/^\d+$/.test(orderId)) {
+      query = `
+        SELECT o.*, u.id AS user_id, u.name, u.email, u.phone, a.id AS address_id, 
+               a.phone_number, a.email AS address_email, a.address, a.floor, a.tag, a.pin_code
+        FROM milletorders o
+        JOIN user u ON o.user_id = u.id
+        LEFT JOIN address a ON o.address_id = a.id
+        WHERE o.id = ?`;
+      queryParams = [orderId];
+    } else {
+      query = `
+        SELECT o.*, u.id AS user_id, u.name, u.email, u.phone, a.id AS address_id, 
+               a.phone_number, a.email AS address_email, a.address, a.floor, a.tag, a.pin_code
+        FROM milletorders o
+        JOIN user u ON o.user_id = u.id
+        LEFT JOIN address a ON o.address_id = a.id
+        WHERE o.order_id = ?`;
+      queryParams = [orderId];
+    }
+
+    const [results] = await connection.query(query, queryParams);
+
+    if (results.length === 0) {
+      connection.release();
+      return res.status(404).json({ message: `Order with ID ${orderId} not found.` });
+    }
+
+    const order = results[0];
+    const products = parseProducts(order.products);
+    const productIds = products.map((p) => p.id);
+    let productsWithDetails = [];
+
+    if (productIds.length > 0) {
+      const [productResults] = await connection.query("SELECT * FROM milletproducts WHERE id IN (?)", [productIds]);
+
+      productsWithDetails = products.map((product) => {
+        const productDetails = productResults.find((p) => p.id === product.id);
+        return productDetails
+          ? {
+              id: product.id,
+              quantity: product.quantity,
+              name: productDetails.name,
+              description: productDetails.description,
+              price: productDetails.price,
+              discount: productDetails.discount,
+              original_price: productDetails.original_price,
+              image: productDetails.image,
+              stars: productDetails.stars,
+            }
+          : null;
+      }).filter(Boolean);
+    }
+
+    const formattedOrder = {
+      id: order.id,
+      order_id: order.order_id,
+      user: { id: order.user_id, name: order.name, email: order.email, phone: order.phone },
+      address: order.address_id
+        ? {
+            id: order.address_id,
+            phone_number: order.phone_number,
+            email: order.address_email,
+            address: order.address,
+            floor: order.floor,
+            tag: order.tag,
+            pin_code: order.pin_code,
+          }
+        : null,
+      products: productsWithDetails,
+      total_mrp: order.total_mrp,
+      discount_on_mrp: order.discount_on_mrp,
+      total_amount: order.total_amount,
+      order_status: order.order_status,
+      created_at: order.created_at,
+      updated_at: order.updated_at,
+    };
+
+    connection.release();
+    return res.status(200).json({ message: "Order retrieved successfully.", order: formattedOrder });
+  } catch (error) {
+    if (connection) connection.release();
+    return res.status(500).json({ message: "Error fetching order.", error });
+  }
+};
+
+
 const createOrder = (req, res) => {
   const { user_id, address_id, products, total_mrp, discount_on_mrp, total_amount } = req.body;
 
@@ -340,208 +543,7 @@ const updateOrderStatus = (req, res) => {
   });
 };
 
-const getAllOrders = (req, res) => {
-  pool.getConnection((err, connection) => {
-    if (err) {
-      return res.status(500).json({ message: "Database connection error", error: err });
-    }
 
-    const query = "SELECT * FROM milletorders ORDER BY created_at DESC"; // Assuming you have a created_at column
-
-    connection.query(query, (err, orders) => {
-      connection.release();
-
-      if (err) {
-        return res.status(500).json({ message: "Error fetching orders.", error: err });
-      }
-
-      // If there are orders, process them
-      if (orders.length === 0) {
-        return res.status(404).json({ message: "No orders found." });
-      }
- 
-      const ordersWithDetailsPromises = orders.map(order => {
-        return new Promise((resolve, reject) => {
-        
-          connection.query('SELECT * FROM user WHERE id = ?', [order.user_id], (err, userResults) => {
-            if (err) return reject(err);
-            const user = userResults[0];
- 
-            connection.query('SELECT * FROM address WHERE id = ?', [order.address_id], (err, addressResults) => {
-              if (err) return reject(err);
-              const address = addressResults[0];
-
-              // Fetch product details for each product in the order
-              const productIds = order.products.map(p => p.id);
-              connection.query('SELECT * FROM milletproducts WHERE id IN (?)', [productIds], (err, productResults) => {
-                if (err) return reject(err);
-
-                // Map products with details
-                const productsWithDetails = order.products.map(product => {
-                  const productDetails = productResults.find(p => p.id === product.id);
-                  return {
-                    id: product.id,
-                    quantity: product.quantity,
-                    name: productDetails.name,
-                    description: productDetails.description,
-                    price: productDetails.price,
-                    discount: productDetails.discount,
-                    original_price: productDetails.original_price,
-                    image: productDetails.image,
-                    stars: productDetails.stars
-                  };
-                });
-
-                // Map the full order object with user, address, and products
-                resolve({
-                  id: order.id,
-                  order_id: order.order_id,
-                  user: {
-                    id: user.id,
-                    name: user.name,
-                    email: user.email,
-                    phone: user.phone
-                  },
-                  address: address ? {
-                    id: address.id,
-                    phone_number: address.phone_number,
-                    email: address.email,
-                    address: address.address,
-                    floor: address.floor,
-                    tag: address.tag,
-                    pin_code: address.pin_code
-                  } : null,
-                  products: productsWithDetails,
-                  total_mrp: order.total_mrp,
-                  discount_on_mrp: order.discount_on_mrp,
-                  total_amount: order.total_amount,
-                  order_status: order.order_status,
-                  created_at: order.created_at,
-                  updated_at: order.updated_at
-                });
-              });
-            });
-          });
-        });
-      });
-
-      // Wait for all promises to resolve and send the response
-      Promise.all(ordersWithDetailsPromises)
-        .then(ordersWithDetails => {
-          return res.status(200).json({ message: "Orders retrieved successfully.", orders: ordersWithDetails });
-        })
-        .catch(err => {
-          return res.status(500).json({ message: "Error processing orders.", error: err });
-        });
-    });
-  });
-};
-
-const getOrderByOrderId = (req, res) => {
-  const { orderId } = req.params;
-
-  if (!orderId) {
-    return res.status(400).json({ message: "Order ID is required." });
-  }
-
-  pool.getConnection((err, connection) => {
-    if (err) {
-      return res.status(500).json({ message: "Database connection error", error: err });
-    }
-
-    let query;
-    let queryParams;
-
-    // Check if the orderId is numeric (ID) or alphanumeric (order_id)
-    if (/^\d+$/.test(orderId)) {
-      query = `
-        SELECT o.*, u.id AS user_id, u.name, u.email, u.phone, a.id AS address_id, a.phone_number, a.email AS address_email, a.address, a.floor, a.tag, a.pin_code
-        FROM milletorders o
-        JOIN user u ON o.user_id = u.id
-        LEFT JOIN address a ON o.address_id = a.id
-        WHERE o.id = ?
-      `;
-      queryParams = [orderId];
-    } else {
-      query = `
-        SELECT o.*, u.id AS user_id, u.name, u.email, u.phone, a.id AS address_id, a.phone_number, a.email AS address_email, a.address, a.floor, a.tag, a.pin_code
-        FROM milletorders o
-        JOIN user u ON o.user_id = u.id
-        LEFT JOIN address a ON o.address_id = a.id
-        WHERE o.order_id = ?
-      `;
-      queryParams = [orderId];
-    }
-
-    connection.query(query, queryParams, (err, results) => {
-      connection.release();
-
-      if (err) {
-        return res.status(500).json({ message: "Error fetching order.", error: err });
-      }
-
-      if (results.length === 0) {
-        return res.status(404).json({ message: `Order with ID ${orderId} not found.` });
-      }
- 
-      const order = results[0];
-      const productIds = order.products.map(product => product.id);  
- 
-      const productQuery = `
-        SELECT * FROM milletproducts WHERE id IN (?);
-      `;
-      connection.query(productQuery, [productIds], (err, products) => {
-        if (err) {
-          return res.status(500).json({ message: "Error fetching product details.", error: err });
-        }
- 
-        const productsWithDetails = order.products.map(product => {
-          const productDetails = products.find(p => p.id === product.id);
-          return {
-            id: product.id,
-            quantity: product.quantity,
-            name: productDetails.name,
-            description: productDetails.description,
-            price: productDetails.price,
-            discount: productDetails.discount,
-            original_price: productDetails.original_price,
-            image: productDetails.image,
-            stars: productDetails.stars
-          };
-        });
- 
-        const formattedOrder = {
-          id: order.id,
-          order_id: order.order_id,
-          user: {
-            id: order.user_id,
-            name: order.name,
-            email: order.email,
-            phone: order.phone
-          },
-          address: order.address_id ? {
-            id: order.address_id,
-            phone_number: order.phone_number,
-            email: order.address_email,
-            address: order.address,
-            floor: order.floor,
-            tag: order.tag,
-            pin_code: order.pin_code
-          } : null,
-          products: productsWithDetails,
-          total_mrp: order.total_mrp,
-          discount_on_mrp: order.discount_on_mrp,
-          total_amount: order.total_amount,
-          order_status: order.order_status,
-          created_at: order.created_at,
-          updated_at: order.updated_at
-        };
-
-        return res.status(200).json({ message: "Order retrieved successfully.", order: formattedOrder });
-      });
-    });
-  });
-};
 
 
 const orderSummary = (req, res) => {
