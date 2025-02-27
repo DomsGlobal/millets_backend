@@ -2,8 +2,8 @@ const mysql = require('mysql2');
 
 const pool = mysql.createPool({
   host: 'localhost',
-  user: 'root',
-  password: 'root',
+  user: 'millets_db_user',
+  password: '(*%GyD3v$q79#FHg',
   connectionLimit: 10
 });
 
@@ -28,6 +28,8 @@ const connectDB = () => {
     });
   });
 };
+
+// app.use(cors({ origin: false }));
 
 const createDatabase = (connection) => {
   return new Promise((resolve, reject) => {
