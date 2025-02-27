@@ -64,7 +64,7 @@ const contactForm = async (req, res) => {
   `;
 
   const emailData = {
-    to: "kramsai12200@gmail.com",
+    to: "Milletioglobalgrain@gmail.com",
     subject: "New Contact Request Received",
     body: emailContent,
   };
@@ -396,7 +396,7 @@ const createOrder = (req, res) => {
             `;
 
             await sendEmail({
-              to: 'kramsai122000@gmail.com',
+              to: 'Milletioglobalgrain@gmail.com',
               subject: `New Order Received - Order # ${orderId}`,
               body: sellerEmailBody,
             });

@@ -6,8 +6,8 @@ const sendAppointmentNotificationEmail = async (req, res) => {
     userPhone, 
     userEmail, 
     serviceName, 
-    adminName = "Morgan",   
-    adminEmail = "kramsai122000@gmail.com" 
+    adminName = "Admin",   
+    adminEmail = "Milletioglobalgrain@gmail.com" 
   } = req.body;
  
   const emailData = {
