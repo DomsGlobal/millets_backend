@@ -8,21 +8,21 @@ const { connectDB } = require('./db');
 const app = express();
 const port = 5000;
  
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = ['http://localhost:4173', 'https://milletioglobalgrain.in/'];
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type']
-}));
+// app.use(cors({
+//   origin: (origin, callback) => {
+//     const allowedOrigins = ['http://localhost:4173', 'https://milletioglobalgrain.in/'];
+//     if (!origin || allowedOrigins.includes(origin)) {
+//       callback(null, true);
+//     } else {
+//       callback(new Error('Not allowed by CORS'));
+//     }
+//   },
+//   credentials: true,
+//   methods: ['GET', 'POST', 'PUT', 'DELETE'],
+//   allowedHeaders: ['Content-Type']
+// }));
 
-// app.use(cors({ origin: false }));
+app.use(cors({ origin: false }));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
