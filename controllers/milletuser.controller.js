@@ -361,48 +361,72 @@ const getAllUsers = (req, res) => {
 
 // Get user by ID
 const getUserById = (req, res) => {
-  const { userId } = req.params;
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: 'Unauthorized: No token provided' });
+  }
 
   pool.getConnection((err, connection) => {
-    if (err) return res.status(500).json({ message: 'Database connection error' });
+    if (err) return res.status(500).json({ message: 'Database connection error', error: err });
 
-    const query = `
-      SELECT u.id, u.name, u.email, u.phone, 
-             COUNT(o.id) AS order_count, 
-             GROUP_CONCAT(DISTINCT o.products) AS product_ids
-      FROM user u
-      LEFT JOIN milletorders o ON u.id = o.user_id
-      WHERE u.id = ?
-      GROUP BY u.id
-    `;
-
-    connection.query(query, [userId], (err, results) => {
+    // Fetch user_id based on token
+    const userQuery = 'SELECT id, name, email, phone FROM user WHERE token = ?';
+    connection.query(userQuery, [token], (err, userResults) => {
       if (err) {
         connection.release();
-        return res.status(500).json({ message: 'Error fetching user' });
+        return res.status(500).json({ message: 'Error fetching user details.', error: err });
       }
 
-      if (results.length === 0) {
+      if (userResults.length === 0) {
         connection.release();
-        return res.status(404).json({ message: 'User not found' });
+        return res.status(401).json({ message: 'Unauthorized: Invalid token' });
       }
 
-      const user = results[0];
+      const user = userResults[0];
+      const userId = user.id;
+      console.log("Fetched user_id:", userId);
 
-      const productIds = user.product_ids ? [...new Set(user.product_ids.split(','))] : [];
+      // Fetch user details and orders
+      const userDetailQuery = `
+        SELECT u.id, u.name, u.email, u.phone, 
+               COUNT(o.id) AS order_count, 
+               GROUP_CONCAT(DISTINCT o.products) AS product_ids
+        FROM user u
+        LEFT JOIN milletorders o ON u.id = o.user_id
+        WHERE u.id = ?
+        GROUP BY u.id
+      `;
 
-      if (productIds.length === 0) {
-        connection.release();
-        return res.status(200).json({ user: { ...user, products: [] } });
-      }
- 
-      const productQuery = `SELECT * FROM milletproducts WHERE id IN (?)`;
-      connection.query(productQuery, [productIds], (err, productResults) => {
-        connection.release();
-        if (err) return res.status(500).json({ message: 'Error fetching products' });
+      connection.query(userDetailQuery, [userId], (err, results) => {
+        if (err) {
+          connection.release();
+          return res.status(500).json({ message: 'Error fetching user details.', error: err });
+        }
 
-        user.products = productResults;
-        res.status(200).json({ user });
+        if (results.length === 0) {
+          connection.release();
+          return res.status(404).json({ message: 'User not found' });
+        }
+
+        const user = results[0];
+
+        const productIds = user.product_ids ? [...new Set(user.product_ids.split(','))] : [];
+
+        if (productIds.length === 0) {
+          connection.release();
+          return res.status(200).json({ user: { ...user, products: [] } });
+        }
+
+        // Fetch product details for ordered products
+        const productQuery = `SELECT * FROM milletproducts WHERE id IN (?)`;
+        connection.query(productQuery, [productIds], (err, productResults) => {
+          connection.release();
+          if (err) return res.status(500).json({ message: 'Error fetching products', error: err });
+
+          user.products = productResults;
+          res.status(200).json({ user });
+        });
       });
     });
   });

@@ -1,5 +1,7 @@
 const { Cart } = require('../models/cart.model');
 const { pool } = require('../db');
+const jwt = require('jsonwebtoken');
+const secretKey = 'your_secret_key';
 
 const addToCart = (req, res) => {
     const { user_id, products } = req.body; // Expecting an array of products
@@ -39,26 +41,56 @@ const addToCart = (req, res) => {
   };
   
   const getCartByUserId = (req, res) => {
-    const { user_id } = req.params;
+    const token = req.headers.authorization?.split(' ')[1];
   
-    if (!user_id) {
-      return res.status(400).json({ success: false, message: 'User ID is required.' });
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
     }
   
-    Cart.findByUserId(user_id, (err, cartItems) => {
+    jwt.verify(token, secretKey, (err, decoded) => {
       if (err) {
-        console.error('Error retrieving cart:', err);
-        return res.status(500).json({ success: false, message: 'Error retrieving cart.', error: err });
+        return res.status(401).json({ success: false, message: 'Unauthorized: Invalid token' });
       }
   
-      res.status(200).json({
-        success: true,
-        message: cartItems.length > 0 ? 'Cart retrieved successfully.' : 'Cart is empty.',
-        cart: cartItems
+      const tokenValue = token; // Using the token to find the user ID
+  
+      pool.getConnection((err, connection) => {
+        if (err) return res.status(500).json({ success: false, message: 'Database connection error' });
+  
+        // Query to find the user by token
+        const userQuery = 'SELECT id FROM user WHERE token = ?';
+        connection.query(userQuery, [tokenValue], (err, results) => {
+          if (err) {
+            connection.release();
+            return res.status(500).json({ success: false, message: 'Error fetching user', error: err });
+          }
+  
+          if (!results.length) {
+            connection.release();
+            return res.status(404).json({ success: false, message: 'User not found' });
+          }
+  
+          const user_id = results[0].id;
+          console.log("Resolved User ID:", user_id);
+   
+          Cart.findByUserId(user_id, (err, cartItems) => {
+            connection.release();
+            if (err) {
+              console.error('Error retrieving cart:', err);
+              return res.status(500).json({ success: false, message: 'Error retrieving cart.', error: err });
+            }
+  
+            res.status(200).json({
+              success: true,
+              message: cartItems.length > 0 ? 'Cart retrieved successfully.' : 'Cart is empty.',
+              cart: cartItems
+            });
+          });
+        });
       });
     });
   };
-  
+      
 
 const removeCartItem = (req, res) => {
     const { id } = req.params;

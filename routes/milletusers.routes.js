@@ -8,6 +8,6 @@ router.post('/verify', verifyOtpAndRegister);
 router.post('/login', login);
 router.post('/logout/:userId', logout);
 router.get('/all', getAllUsers); 
-router.get('/:userId', getUserById);  
+router.get('/profile', getUserById);
 
 module.exports = router;

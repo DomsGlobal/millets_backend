@@ -4,9 +4,9 @@ const cartController = require('../controllers/cart.controller');
 const auth = require('../middleware/auth');  
  
 router.post('/cart/add', auth, cartController.addToCart);
-router.get('/cart/:user_id', auth, cartController.getCartByUserId);
+router.get('/cart/user', auth, cartController.getCartByUserId);
 router.delete('/cart/clear', auth, cartController.clearCart);  
-router.delete('/cart/:id', auth, cartController.removeCartItem); // cartId
-router.put('/cart/:id', auth, cartController.updateCartItem); // cartId
+router.delete('/cart/:id', auth, cartController.removeCartItem);
+router.put('/cart/:id', auth, cartController.updateCartItem);
 
 module.exports = router;

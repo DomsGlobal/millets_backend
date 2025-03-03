@@ -4,6 +4,8 @@ const { Order } = require('../models/milletorders.model');
 const { User } = require('../models/milletusers.model');
 const { pool } = require('../db'); 
 
+const jwt = require('jsonwebtoken');
+const secretKey = 'your_secret_key';
 
 const generateOrderId = () => {
   return Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -45,6 +47,156 @@ const sendEmail = async (emailData) => {
   }
 }; 
 
+const createOrder = (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  console.log("Extracted Token:", token);
+  
+  if (!token) {
+    return res.status(401).json({ message: 'Unauthorized: No token provided' });
+  }
+
+  pool.getConnection((err, connection) => {
+    if (err) {
+      return res.status(500).json({ message: 'Database connection error', error: err });
+    }
+
+    // Fetch user_id from the database where token matches
+    const userQuery = 'SELECT id, email, phone FROM user WHERE token = ?';
+    connection.query(userQuery, [token], (err, userResults) => {
+      if (err) {
+        connection.release();
+        return res.status(500).json({ message: 'Error fetching user details.', error: err });
+      }
+
+      if (userResults.length === 0) {
+        connection.release();
+        return res.status(401).json({ message: 'Unauthorized: Invalid token' });
+      }
+
+      const user = userResults[0];
+      const user_id = user.id;
+      console.log("Fetched user_id:", user_id);
+
+      console.log("Received Request Body:", req.body);
+      const { address_id, products, total_mrp, discount_on_mrp, total_amount } = req.body;
+      console.log("Parsed Values:", { address_id, products, total_mrp, total_amount });
+
+      if (!user_id || !address_id || !Array.isArray(products) || !total_mrp || !total_amount) {
+        connection.release();
+        return res.status(400).json({ message: 'Missing or invalid required fields.' });
+      }
+
+      const orderId = generateOrderId();
+      const orderDate = new Date().toLocaleString();
+      const formattedProducts = JSON.stringify(products);
+
+      // Fetch address details
+      const addressQuery = 'SELECT address, floor, tag FROM address WHERE id = ? AND user_id = ?';
+      connection.query(addressQuery, [address_id, user_id], (err, addressResults) => {
+        if (err) {
+          connection.release();
+          return res.status(500).json({ message: 'Error fetching address details.', error: err });
+        }
+
+        const address = addressResults.length
+          ? addressResults[0]
+          : { address: 'Not Provided', floor: 'Not Provided', tag: 'Not Provided' };
+
+        // Insert order
+        const orderQuery = `
+          INSERT INTO milletorders (user_id, address_id, products, total_mrp, discount_on_mrp, total_amount, order_status, order_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        connection.query(orderQuery, [
+          user_id,
+          address_id,
+          formattedProducts,
+          total_mrp,
+          discount_on_mrp || null,
+          total_amount,
+          'pending',
+          orderId
+        ], (err, result) => {
+          if (err) {
+            connection.release();
+            return res.status(500).json({ message: 'Error creating order.', error: err });
+          }
+
+          const productIds = products.map(p => p.id);
+          const productQuery = 'SELECT id, name, price, discount, image FROM milletproducts WHERE id IN (?)';
+
+          connection.query(productQuery, [productIds], async (err, productResults) => {
+            connection.release();
+
+            if (err) {
+              return res.status(500).json({ message: 'Error fetching product details.', error: err });
+            }
+
+            const productDetails = productResults.map(product => {
+              const productData = products.find(p => p.id === product.id);
+              return {
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                discount: product.discount,
+                quantity: productData.quantity,
+                imageUrl: product.image
+                  ? `https://api.milletioglobalgrain.in/${product.image}`
+                  : 'https://api.milletioglobalgrain.in/uploads/default-image.jpg'
+              };
+            });
+
+            // **Seller Email**
+            const sellerEmailBody = `
+              <h1>New Order Received - Order # ${orderId}</h1>
+              <p><strong>Order Date:</strong> ${orderDate}</p>
+              <h3>Customer Details:</h3>
+              <ul>
+                <li><strong>Email:</strong> ${user.email}</li>
+                <li><strong>Phone:</strong> ${user.phone}</li>
+                <li><strong>Shipping Address:</strong> ${address.address}, Floor: ${address.floor}</li>
+                <li><strong>Tag:</strong> ${address.tag}</li>
+              </ul>
+              <h3>Ordered Products:</h3>
+              ${generateProductTable(productDetails)}
+              <h3>Total Amount: ${total_amount}</h3>  
+              <p>Please prepare the order for shipment and ensure it reaches the customer within the expected timeframe.</p>
+            `;
+
+            await sendEmail({
+              to: 'Milletioglobalgrain@gmail.com',
+              subject: `New Order Received - Order # ${orderId}`,
+              body: sellerEmailBody,
+            });
+
+            // **Customer Email**
+            const customerEmailBody = `
+              <h1>Order Confirmation - Order # ${orderId}</h1>
+              <p><strong>Order Date:</strong> ${orderDate}</p>
+              <h3>Ordered Products:</h3>
+              ${generateProductTable(productDetails)}
+              <h3>Total Amount: ${total_amount}</h3> 
+              <p>Thank you for shopping with us! Your order will be processed soon.</p>
+            `;
+
+            await sendEmail({
+              to: user.email,
+              subject: `Order Confirmation from Milletio`,
+              body: customerEmailBody,
+            });
+
+            res.status(201).json({
+              message: 'Order created successfully.',
+              orderId: result.insertId,
+              randomOrderId: orderId,
+            });
+          });
+        });
+      });
+    });
+  });
+};
 
 const contactForm = async (req, res) => {
   const { name, phone, email, message } = req.body;
@@ -293,141 +445,6 @@ const getOrderByOrderId = async (req, res) => {
 };
 
 
-const createOrder = (req, res) => {
-  const { user_id, address_id, products, total_mrp, discount_on_mrp, total_amount } = req.body;
-
-  if (!user_id || !address_id || !Array.isArray(products) || !total_mrp || !total_amount) {
-    return res.status(400).json({ message: 'Missing or invalid required fields.' });
-  }
-
-  const orderId = generateOrderId();
-  const orderDate = new Date().toLocaleString();
-  const formattedProducts = JSON.stringify(products); // Save as JSON in DB
-
-  pool.getConnection((err, connection) => {
-    if (err) return res.status(500).json({ message: 'Database connection error', error: err });
-
-    const userQuery = 'SELECT email, phone FROM user WHERE id = ?';
-    connection.query(userQuery, [user_id], (err, userResults) => {
-      if (err) {
-        connection.release();
-        return res.status(500).json({ message: 'Error fetching user details.', error: err });
-      }
-
-      if (!userResults.length) {
-        connection.release();
-        return res.status(404).json({ message: 'User not found.' });
-      }
-
-      const user = userResults[0];
-
-      // Fetch address separately
-      const addressQuery = 'SELECT address, floor, tag FROM address WHERE id = ? AND user_id = ?';
-      connection.query(addressQuery, [address_id, user_id], (err, addressResults) => {
-        if (err) {
-          connection.release();
-          return res.status(500).json({ message: 'Error fetching address details.', error: err });
-        }
-
-        const address = addressResults.length
-          ? addressResults[0]
-          : { address: 'Not Provided', floor: 'Not Provided', tag: 'Not Provided' };
-
-        // Insert order
-        const orderQuery = `
-          INSERT INTO milletorders (user_id, address_id, products, total_mrp, discount_on_mrp, total_amount, order_status, order_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-
-        connection.query(orderQuery, [
-          user_id,
-          address_id,
-          formattedProducts,
-          total_mrp,
-          discount_on_mrp || null,
-          total_amount,
-          'pending',
-          orderId
-        ], (err, result) => {
-          if (err) {
-            connection.release();
-            return res.status(500).json({ message: 'Error creating order.', error: err });
-          }
-
-          const productIds = products.map(p => p.id);
-          const productQuery = 'SELECT id, name, price, discount, image FROM milletproducts WHERE id IN (?)';
-
-          connection.query(productQuery, [productIds], async (err, productResults) => {
-            connection.release();
-
-            if (err) {
-              return res.status(500).json({ message: 'Error fetching product details.', error: err });
-            }
-
-            const productDetails = productResults.map(product => {
-              const productData = products.find(p => p.id === product.id);
-              return {
-                id: product.id,
-                name: product.name,
-                price: product.price,
-                discount: product.discount,
-                quantity: productData.quantity,
-                imageUrl: product.image
-                  ? `https://api.milletioglobalgrain.in/${product.image}`
-                  : 'https://api.milletioglobalgrain.in/uploads/default-image.jpg'
-              };
-            });
-
-            // **Seller Email**
-            const sellerEmailBody = `
-              <h1>New Order Received - Order # ${orderId}</h1>
-              <p><strong>Order Date:</strong> ${orderDate}</p>
-              <h3>Customer Details:</h3>
-              <ul>
-                <li><strong>Email:</strong> ${user.email}</li>
-                <li><strong>Phone:</strong> ${user.phone}</li>
-                <li><strong>Shipping Address:</strong> ${address.address}, Floor: ${address.floor}</li>
-                <li><strong>Tag:</strong> ${address.tag}</li>
-              </ul>
-              <h3>Ordered Products:</h3>
-              ${generateProductTable(productDetails)}
-              <h3>Total Amount: ${total_amount}</h3>  
-              <p>Please prepare the order for shipment and ensure it reaches the customer within the expected timeframe.</p>
-            `;
-
-            await sendEmail({
-              to: 'Milletioglobalgrain@gmail.com',
-              subject: `New Order Received - Order # ${orderId}`,
-              body: sellerEmailBody,
-            });
-
-            // **Customer Email**
-            const customerEmailBody = `
-              <h1>Order Confirmation - Order # ${orderId}</h1>
-              <p><strong>Order Date:</strong> ${orderDate}</p>
-              <h3>Ordered Products:</h3>
-              ${generateProductTable(productDetails)}
-              <h3>Total Amount: ${total_amount}</h3> 
-              <p>Thank you for shopping with us! Your order will be processed soon.</p>
-            `;
-
-            await sendEmail({
-              to: user.email,
-              subject: `Order Confirmation from Milletio`,
-              body: customerEmailBody,
-            });
-
-            res.status(201).json({
-              message: 'Order created successfully.',
-              orderId: result.insertId,
-              randomOrderId: orderId,
-            });
-          });
-        });
-      });
-    });
-  });
-};
 
 // Helper function to generate product table HTML
 const generateProductTable = (products) => {
